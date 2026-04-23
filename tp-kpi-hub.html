@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TP KPI Hub — Teleperformance Portugal Logistics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#f4f6fb;--s1:#ffffff;--s2:#f0f3fa;--s3:#e6eaf5;
+  --border:#e2e6f0;--border2:#cdd3e8;
+  --blue:#3b6ef8;--blue-soft:rgba(59,110,248,.09);
+  --green:#15803d;--green-soft:rgba(21,128,61,.09);
+  --amber:#b45309;--amber-soft:rgba(180,83,9,.09);
+  --red:#c0392b;--red-soft:rgba(192,57,43,.09);
+  --purple:#6d28d9;--purple-soft:rgba(109,40,217,.09);
+  --teal:#0e7490;--teal-soft:rgba(14,116,144,.09);
+  --slate:#475569;--slate-soft:rgba(71,85,105,.09);
+  --text:#1a2038;--muted:#64748b;--subtle:#94a3b8;
+  --mono:'JetBrains Mono',monospace;
+  --sans:'Plus Jakarta Sans',sans-serif;
+  --r:10px;--r-sm:6px;--r-lg:14px;
+  --shadow:0 1px 4px rgba(0,0,0,.06),0 4px 16px rgba(0,0,0,.04);
+}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh;}
+
+/* ── TOPBAR ── */
+.topbar{
+  position:sticky;top:0;z-index:100;
+  background:rgba(255,255,255,.96);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--border);
+  height:58px;padding:0 1.5rem;
+  display:flex;align-items:center;justify-content:space-between;
+  box-shadow:0 1px 0 var(--border);
+}
+.brand{display:flex;align-items:center;gap:10px;}
+.brand-icon{
+  width:32px;height:32px;background:var(--blue);border-radius:8px;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.brand-icon svg{width:16px;height:16px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;}
+.brand-name{font-size:14px;font-weight:600;color:var(--text);}
+.brand-sub{font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:1px;}
+.topbar-right{display:flex;align-items:center;gap:10px;}
+.status-pill{
+  display:flex;align-items:center;gap:5px;
+  font-size:10px;font-weight:500;font-family:var(--mono);
+  color:var(--green);background:var(--green-soft);
+  border:1px solid rgba(21,128,61,.2);
+  padding:4px 10px;border-radius:20px;
+}
+.status-dot{width:5px;height:5px;border-radius:50%;background:var(--green);animation:blink 2s ease-in-out infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+.update-time{font-size:10px;color:var(--subtle);font-family:var(--mono);}
+.btn-refresh{
+  font-size:11px;font-weight:500;padding:6px 12px;
+  background:var(--s2);color:var(--muted);
+  border:1px solid var(--border2);border-radius:var(--r-sm);
+  cursor:pointer;transition:all .15s;
+}
+.btn-refresh:hover{background:var(--s3);color:var(--text);}
+.btn-share{
+  font-size:12px;font-weight:600;padding:7px 18px;
+  background:var(--blue);color:#fff;
+  border:none;border-radius:var(--r-sm);
+  cursor:pointer;transition:opacity .15s;
+}
+.btn-share:hover{opacity:.88;}
+
+/* ── LOADING ── */
+#loadingScreen{
+  position:fixed;inset:0;z-index:500;
+  background:var(--bg);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;
+}
+.loading-spinner{
+  width:36px;height:36px;border:3px solid var(--border2);
+  border-top-color:var(--blue);border-radius:50%;
+  animation:spin .8s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{font-size:13px;color:var(--muted);font-family:var(--mono);}
+
+/* ── ERROR BANNER ── */
+#errorBanner{
+  display:none;background:#fef2f2;border:1px solid #fca5a5;
+  border-radius:var(--r);padding:12px 16px;margin:1rem 1.5rem 0;
+  font-size:12px;color:var(--red);
+}
+
+/* ── NAV TABS ── */
+.nav-wrap{background:var(--s1);border-bottom:1px solid var(--border);padding:0 1.5rem;display:flex;gap:0;overflow-x:auto;scrollbar-width:none;}
+.nav-wrap::-webkit-scrollbar{display:none;}
+.tab{
+  font-size:12px;font-weight:500;padding:14px 16px;
+  color:var(--muted);cursor:pointer;
+  border-bottom:2px solid transparent;white-space:nowrap;
+  transition:all .15s;user-select:none;
+  display:flex;align-items:center;gap:6px;
+}
+.tab:hover{color:var(--text);}
+.tab.active{color:var(--blue);border-bottom-color:var(--blue);}
+.tab-badge{
+  font-size:9px;font-weight:600;font-family:var(--mono);
+  padding:1px 5px;border-radius:3px;
+}
+
+/* ── MAIN ── */
+.tab-content{display:none;padding:1.5rem;animation:fadein .2s ease;}
+.tab-content.active{display:block;}
+@keyframes fadein{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── SECTION LABEL ── */
+.slabel{
+  font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:.75rem;margin-top:1.5rem;
+  display:flex;align-items:center;gap:8px;
+}
+.slabel:first-child{margin-top:0;}
+.slabel::after{content:'';flex:1;height:1px;background:var(--border);}
+
+/* ── STAT CARDS ── */
+.cards-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:1.5rem;}
+.kcard{
+  background:var(--s1);border:1px solid var(--border);
+  border-radius:var(--r);padding:1rem 1.1rem;
+  border-left:3px solid var(--kc,var(--blue));
+  box-shadow:var(--shadow);transition:box-shadow .2s;
+}
+.kcard:hover{box-shadow:0 2px 12px rgba(0,0,0,.08);}
+.kcard-label{font-size:10px;color:var(--muted);font-weight:500;margin-bottom:6px;line-height:1.3;}
+.kcard-value{font-size:24px;font-weight:700;color:var(--text);font-family:var(--mono);line-height:1;}
+.kcard-sub{font-size:10px;color:var(--muted);margin-top:6px;}
+
+/* ── CHIPS ── */
+.chip{display:inline-flex;align-items:center;gap:3px;font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;font-family:var(--mono);letter-spacing:.02em;}
+.chip-blue{color:var(--blue);background:var(--blue-soft);}
+.chip-green{color:var(--green);background:var(--green-soft);}
+.chip-amber{color:var(--amber);background:var(--amber-soft);}
+.chip-red{color:var(--red);background:var(--red-soft);}
+.chip-purple{color:var(--purple);background:var(--purple-soft);}
+.chip-slate{color:var(--slate);background:var(--slate-soft);}
+
+/* ── TABLES ── */
+.tbl-card{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:1.25rem;box-shadow:var(--shadow);}
+.tbl-hdr{padding:.9rem 1.1rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;background:var(--s1);}
+.tbl-hdr h3{font-size:13px;font-weight:600;color:var(--text);}
+.tbl-wrap{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;}
+th{font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;padding:9px 14px;text-align:left;border-bottom:1px solid var(--border);background:var(--s2);white-space:nowrap;}
+td{font-size:12px;padding:9px 14px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:var(--s2);}
+.mono{font-family:var(--mono);font-size:11px;}
+
+/* ── BAR ── */
+.bar-wrap{display:flex;align-items:center;gap:8px;}
+.bar-bg{flex:1;height:5px;background:var(--s3);border-radius:3px;min-width:60px;overflow:hidden;}
+.bar-fill{height:100%;border-radius:3px;transition:width .4s ease;}
+
+/* ── CHARTS ── */
+.chart-card{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);padding:1.25rem;box-shadow:var(--shadow);}
+.cc-title{font-size:13px;font-weight:600;color:var(--text);}
+.cc-sub{font-size:10px;color:var(--muted);margin-top:2px;margin-bottom:1rem;}
+.chart-wrap{position:relative;width:100%;}
+.charts-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-bottom:1.25rem;}
+
+/* ── GRID 4 ── */
+.grid-4{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;}
+
+/* ── SEARCH ── */
+.search-input{
+  font-size:12px;padding:7px 12px;
+  border:1px solid var(--border2);border-radius:var(--r-sm);
+  outline:none;background:var(--s2);color:var(--text);
+  width:220px;font-family:var(--sans);transition:border-color .15s;
+}
+.search-input:focus{border-color:var(--blue);}
+.search-input::placeholder{color:var(--subtle);}
+
+/* ── DRILL BUTTON ── */
+.btn-drill{
+  font-size:10px;font-weight:600;color:var(--blue);
+  background:var(--blue-soft);border:1px solid rgba(59,110,248,.2);
+  border-radius:4px;padding:4px 9px;cursor:pointer;
+  transition:background .15s;white-space:nowrap;
+}
+.btn-drill:hover{background:rgba(59,110,248,.16);}
+
+/* ── MODAL ── */
+.overlay{display:none;position:fixed;inset:0;z-index:300;background:rgba(26,32,56,.4);backdrop-filter:blur(6px);align-items:center;justify-content:center;padding:1rem;}
+.overlay.open{display:flex;}
+.modal{
+  background:var(--s1);border:1px solid var(--border2);
+  border-radius:var(--r-lg);box-shadow:0 20px 60px rgba(0,0,0,.15);
+  width:560px;max-width:100%;max-height:85vh;
+  display:flex;flex-direction:column;overflow:hidden;
+}
+.modal-head{padding:1.25rem 1.5rem;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
+.modal-head h2{font-size:15px;font-weight:700;}
+.modal-head p{font-size:11px;color:var(--muted);margin-top:3px;}
+.modal-close{width:28px;height:28px;border-radius:6px;background:var(--s2);border:1px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;color:var(--muted);}
+.modal-close:hover{background:var(--s3);}
+.modal-body{overflow-y:auto;flex:1;}
+.modal-foot{padding:.9rem 1.5rem;border-top:1px solid var(--border);display:flex;justify-content:flex-end;}
+.btn-close{font-size:12px;font-weight:500;color:var(--muted);background:var(--s2);border:1px solid var(--border2);border-radius:var(--r-sm);padding:7px 16px;cursor:pointer;}
+.btn-close:hover{background:var(--s3);color:var(--text);}
+
+/* ── SHARE MODAL ── */
+.share-modal{background:var(--s1);border:1px solid var(--border2);border-radius:var(--r-lg);padding:1.75rem;width:480px;max-width:100%;box-shadow:0 20px 60px rgba(0,0,0,.12);}
+.share-modal h2{font-size:16px;font-weight:700;margin-bottom:4px;}
+.share-modal p{font-size:12px;color:var(--muted);margin-bottom:1.25rem;line-height:1.7;}
+.link-box{display:flex;gap:8px;background:var(--s2);border:1px solid var(--border2);border-radius:var(--r-sm);padding:10px 12px;margin-bottom:1rem;}
+.link-box span{flex:1;font-family:var(--mono);font-size:10px;color:var(--blue);word-break:break-all;line-height:1.5;}
+.btn-copy{font-size:10px;font-weight:700;color:var(--blue);background:var(--blue-soft);border:1px solid rgba(59,110,248,.2);border-radius:4px;padding:4px 10px;cursor:pointer;white-space:nowrap;}
+.info-note{background:var(--s2);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px;font-size:11px;color:var(--muted);line-height:1.7;}
+.info-note strong{color:var(--text);}
+.share-foot{display:flex;justify-content:flex-end;margin-top:1rem;}
+
+/* ── CONFIG SECTION ── */
+.config-card{background:var(--s1);border:1px solid var(--border2);border-radius:var(--r);padding:1.25rem;margin-bottom:1.25rem;box-shadow:var(--shadow);}
+.config-card label{font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:6px;letter-spacing:.04em;}
+.config-card input{width:100%;font-size:12px;padding:9px 12px;border:1px solid var(--border2);border-radius:var(--r-sm);background:var(--s2);color:var(--text);font-family:var(--mono);outline:none;transition:border-color .15s;}
+.config-card input:focus{border-color:var(--blue);}
+.btn-load{margin-top:10px;font-size:12px;font-weight:600;padding:9px 20px;background:var(--blue);color:#fff;border:none;border-radius:var(--r-sm);cursor:pointer;transition:opacity .15s;}
+.btn-load:hover{opacity:.88;}
+.config-note{font-size:11px;color:var(--muted);margin-top:8px;line-height:1.6;}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:1.5rem;right:1.5rem;z-index:500;background:var(--text);color:#fff;font-family:var(--mono);font-size:11px;padding:10px 16px;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.2);opacity:0;transform:translateY(6px);transition:opacity .2s,transform .2s;pointer-events:none;}
+.toast.show{opacity:1;transform:translateY(0);}
+
+/* ── FOOTER ── */
+.footer{text-align:center;padding:2rem;font-size:10px;color:var(--subtle);font-family:var(--mono);border-top:1px solid var(--border);letter-spacing:.06em;margin-top:1rem;}
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loadingScreen">
+  <div class="loading-spinner"></div>
+  <div class="loading-text">A carregar dados do SharePoint...</div>
+</div>
+
+<!-- ERROR BANNER -->
+<div id="errorBanner"></div>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-icon">
+      <svg viewBox="0 0 16 16"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg>
+    </div>
+    <div>
+      <div class="brand-name">TP KPI Hub</div>
+      <div class="brand-sub" id="fileLabel">Dashboards - KPI (Published).xlsx</div>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <span class="update-time" id="updateTime">—</span>
+    <div class="status-pill" id="statusPill"><span class="status-dot"></span><span id="statusText">A carregar...</span></div>
+    <button class="btn-refresh" onclick="loadAllData()">↻ Actualizar</button>
+    <button class="btn-share" onclick="openShare()">Partilhar ↗</button>
+  </div>
+</div>
+
+<!-- NAV TABS -->
+<div class="nav-wrap">
+  <div class="tab active" onclick="switchTab('overview',this)">Visão Geral</div>
+  <div class="tab" onclick="switchTab('edificios',this)">Edifícios</div>
+  <div class="tab" onclick="switchTab('wah',this)">WAH</div>
+  <div class="tab" onclick="switchTab('outros',this)">Warehouse · Staging · Ap · AVT</div>
+  <div class="tab" onclick="switchTab('terminated',this)">Terminated <span class="tab-badge chip chip-red" id="tbadge">—</span></div>
+  <div class="tab" onclick="switchTab('recuperacoes',this)">Recuperações</div>
+  <div class="tab" onclick="switchTab('assets_user',this)">Assets por User</div>
+  <div class="tab" onclick="switchTab('config',this)">⚙ Config</div>
+</div>
+
+<!-- ===== TAB: VISÃO GERAL ===== -->
+<div class="tab-content active" id="tab-overview">
+  <div class="slabel">Inventário Total — Todos os Locais</div>
+  <div class="cards-grid" id="overviewCards"></div>
+  <div class="slabel">Estado das Recuperações 2025</div>
+  <div class="cards-grid" id="recoveryCards"></div>
+  <div class="charts-2">
+    <div class="chart-card">
+      <div class="cc-title">Distribuição por Localização</div>
+      <div class="cc-sub">Total de assets por tipo de local</div>
+      <div class="chart-wrap" style="height:240px"><canvas id="c_loc"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="cc-title">Taxa de Recuperação Mensal</div>
+      <div class="cc-sub">Recover % por mês — 2025</div>
+      <div class="chart-wrap" style="height:240px"><canvas id="c_rec_bar"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== TAB: EDIFÍCIOS ===== -->
+<div class="tab-content" id="tab-edificios">
+  <div class="slabel">TbEdificios — Assets em Edifícios por Tipo</div>
+  <div class="tbl-card">
+    <div class="tbl-hdr"><h3>Tipo de Asset</h3><span class="chip chip-blue" id="lbl_edif">—</span></div>
+    <div class="tbl-wrap"><table><thead><tr><th>Tipo</th><th>Quantidade</th><th>% do Total</th><th>Distribuição</th></tr></thead><tbody id="tb_edif"></tbody></table></div>
+  </div>
+</div>
+
+<!-- ===== TAB: WAH ===== -->
+<div class="tab-content" id="tab-wah">
+  <div class="slabel">TbWAHA — Assets Work at Home por Tipo</div>
+  <div class="tbl-card">
+    <div class="tbl-hdr"><h3>Tipo de Asset</h3><span class="chip chip-purple" id="lbl_wah">—</span></div>
+    <div class="tbl-wrap"><table><thead><tr><th>Tipo</th><th>Quantidade</th><th>% do Total</th><th>Distribuição</th></tr></thead><tbody id="tb_wah"></tbody></table></div>
+  </div>
+</div>
+
+<!-- ===== TAB: OUTROS LOCAIS ===== -->
+<div class="tab-content" id="tab-outros">
+  <div class="slabel">Warehouse · Staging · Apartamentos · AVT</div>
+  <div class="grid-4">
+    <div class="tbl-card"><div class="tbl-hdr"><h3>TbWarehouse</h3><span class="chip chip-green" id="lbl_wh">—</span></div><div class="tbl-wrap"><table><thead><tr><th>Tipo</th><th>Qtd</th><th>%</th></tr></thead><tbody id="tb_wh"></tbody></table></div></div>
+    <div class="tbl-card"><div class="tbl-hdr"><h3>TbStaging</h3><span class="chip chip-amber" id="lbl_stg">—</span></div><div class="tbl-wrap"><table><thead><tr><th>Tipo</th><th>Qtd</th><th>%</th></tr></thead><tbody id="tb_stg"></tbody></table></div></div>
+    <div class="tbl-card"><div class="tbl-hdr"><h3>TbApartamentos</h3><span class="chip chip-blue" id="lbl_ap">—</span></div><div class="tbl-wrap"><table><thead><tr><th>Tipo</th><th>Qtd</th><th>%</th></tr></thead><tbody id="tb_ap"></tbody></table></div></div>
+    <div class="tbl-card"><div class="tbl-hdr"><h3>TbAVT</h3><span class="chip chip-slate" id="lbl_avt">—</span></div><div class="tbl-wrap"><table><thead><tr><th>Tipo</th><th>Qtd</th><th>%</th></tr></thead><tbody id="tb_avt"></tbody></table></div></div>
+  </div>
+</div>
+
+<!-- ===== TAB: TERMINATED ===== -->
+<div class="tab-content" id="tab-terminated">
+  <div class="slabel">TbTerminatedTipo — Equipamentos com Colaboradores Terminados</div>
+  <div class="cards-grid" id="termCards"></div>
+  <div class="slabel">Distribuição por Tipo de Equipamento</div>
+  <div class="tbl-card">
+    <div class="tbl-hdr"><h3>TbTerminatedTipo</h3><span class="chip chip-red" id="lbl_term">—</span></div>
+    <div class="tbl-wrap"><table><thead><tr><th>Tipo de Asset</th><th>Quantidade</th><th>% do Total</th><th>Distribuição</th></tr></thead><tbody id="tb_term"></tbody></table></div>
+  </div>
+</div>
+
+<!-- ===== TAB: RECUPERAÇÕES ===== -->
+<div class="tab-content" id="tab-recuperacoes">
+  <div class="slabel">TbRecover — Totais Mensais de Recuperação</div>
+  <div class="tbl-card">
+    <div class="tbl-hdr"><h3>Recuperações Mensais — 2025</h3><span class="chip chip-amber" id="lbl_rec">—</span></div>
+    <div class="tbl-wrap"><table><thead><tr><th>Mês</th><th>Resigns</th><th>Equipamentos</th><th>Recuperados</th><th>Em Processo</th><th>Recover %</th><th>Value Retained</th></tr></thead><tbody id="tb_rec"></tbody></table></div>
+  </div>
+  <div class="charts-2">
+    <div class="chart-card">
+      <div class="cc-title">Recover % por Mês</div>
+      <div class="cc-sub">Taxa mensal de recuperação de equipamentos</div>
+      <div class="chart-wrap" style="height:220px"><canvas id="c_rec_line"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="cc-title">Volume Mensal — Resigns vs Recuperados</div>
+      <div class="cc-sub">Comparação de saídas e recuperações por mês</div>
+      <div class="chart-wrap" style="height:220px"><canvas id="c_rec_vol"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== TAB: ASSETS POR USER ===== -->
+<div class="tab-content" id="tab-assets_user">
+  <div class="slabel">TbAssetsPerUser — Colaboradores Terminados e Respectivos Assets</div>
+  <div class="tbl-card">
+    <div class="tbl-hdr">
+      <h3>Assets por Colaborador Terminado</h3>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <input class="search-input" id="searchUser" type="text" placeholder="Pesquisar ID colaborador ou asset..." oninput="filterUsers()">
+        <span class="chip chip-blue" id="userCount">—</span>
+      </div>
+    </div>
+    <div class="tbl-wrap"><table><thead><tr><th>ID Colaborador</th><th>Nº Assets</th><th>Data Fim Contrato</th><th>Detalhe</th></tr></thead><tbody id="tb_users"></tbody></table></div>
+  </div>
+</div>
+
+<!-- ===== TAB: CONFIG ===== -->
+<div class="tab-content" id="tab-config">
+  <div class="slabel">Configuração da Fonte de Dados</div>
+  <div class="config-card">
+    <label>URL CSV DO SHAREPOINT (PUBLICADO NA WEB)</label>
+    <input type="text" id="csvUrlInput" placeholder="https://teleperformance.sharepoint.com/sites/.../Dashboards - KPI (Published).xlsx?output=csv">
+    <button class="btn-load" onclick="saveCsvUrl()">Guardar e Carregar</button>
+    <p class="config-note">
+      Cola aqui o URL obtido em <strong>Ficheiro → Partilhar → Publicar na Web → Copiar ligação</strong> no Excel Online.<br>
+      O dashboard actualiza automaticamente sempre que o Excel é guardado e republicado.
+    </p>
+  </div>
+  <div class="config-card">
+    <label>COMO FUNCIONA A ACTUALIZAÇÃO AUTOMÁTICA</label>
+    <div class="config-note" style="line-height:1.8">
+      <strong>1.</strong> Tu actualizas o ficheiro <code>Dashboards - KPI (Published).xlsx</code> no SharePoint.<br>
+      <strong>2.</strong> O SharePoint actualiza o CSV publicado automaticamente (normalmente &lt;5 min).<br>
+      <strong>3.</strong> Qualquer pessoa que abra ou actualize este dashboard vê os dados novos.<br>
+      <strong>4.</strong> Não precisas de fazer nada na plataforma — funciona em modo "set and forget".
+    </div>
+  </div>
+</div>
+
+<!-- ===== DRILL MODAL (Em/Sem Recuperação) ===== -->
+<div class="overlay" id="drillOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <div><h2 id="drillTitle">—</h2><p id="drillSub">—</p></div>
+      <button class="modal-close" onclick="closeDrill()">✕</button>
+    </div>
+    <div class="modal-body">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr>
+          <th style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;padding:9px 14px;border-bottom:1px solid var(--border);background:var(--s2)">ID Colaborador</th>
+          <th style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;padding:9px 14px;border-bottom:1px solid var(--border);background:var(--s2)">Nº Assets</th>
+          <th style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;padding:9px 14px;border-bottom:1px solid var(--border);background:var(--s2)">Data Fim Contrato</th>
+          <th style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;padding:9px 14px;border-bottom:1px solid var(--border);background:var(--s2)">Estado</th>
+        </tr></thead>
+        <tbody id="drillBody"></tbody>
+      </table>
+    </div>
+    <div class="modal-foot"><button class="btn-close" onclick="closeDrill()">Fechar</button></div>
+  </div>
+</div>
+
+<!-- ===== USER ASSETS MODAL ===== -->
+<div class="overlay" id="userOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <div><h2 id="userModalTitle">Assets do Colaborador</h2><p id="userModalSub">—</p></div>
+      <button class="modal-close" onclick="closeUserModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr>
+          <th style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;padding:9px 14px;border-bottom:1px solid var(--border);background:var(--s2)">Código / Asset ID</th>
+        </tr></thead>
+        <tbody id="userModalBody"></tbody>
+      </table>
+    </div>
+    <div class="modal-foot"><button class="btn-close" onclick="closeUserModal()">Fechar</button></div>
+  </div>
+</div>
+
+<!-- ===== SHARE MODAL ===== -->
+<div class="overlay" id="shareOverlay">
+  <div class="share-modal">
+    <h2>Partilhar Dashboard</h2>
+    <p>Qualquer pessoa com este link pode consultar o dashboard em tempo real, sem necessidade de login ou conta Microsoft.</p>
+    <div class="link-box">
+      <span id="shareLink">https://tp-kpi-hub.vercel.app</span>
+      <button class="btn-copy" onclick="copyLink()">Copiar</button>
+    </div>
+    <div class="info-note">
+      <strong>Actualização automática:</strong> O dashboard lê directamente o CSV publicado do SharePoint. Sempre que guardas o Excel e o CSV é actualizado, todos os viewers vêem os dados novos automaticamente — sem intervenção tua.
+    </div>
+    <div class="share-foot"><button class="btn-close" onclick="closeShare()">Fechar</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="footer">TP KPI HUB · TELEPERFORMANCE PORTUGAL LOGISTICS · DADOS: DASHBOARDS - KPI (PUBLISHED).XLSX</div>
+
+<script>
+// =====================================================================
+// CONFIGURATION — cola aqui o teu URL CSV do SharePoint
+// =====================================================================
+const BASE_URL = 'https://teleperformance.sharepoint.com/sites/PremisesSites/SiteAssets/Published/fe43ac20-e307-4e9a-8f31-4d6b7b6d1678/Dashboards%20-%20KPI%20(Published).xlsx';
+
+// Sheet names (exactamente como aparecem no ficheiro)
+const SHEETS = {
+  dashboard: 'DASHBOARD',
+};
+
+// CORS proxy — necessário porque o SharePoint bloqueia pedidos directos de outros domínios
+const PROXY = 'https://corsproxy.io/?';
+
+function csvUrl(sheet) {
+  return PROXY + encodeURIComponent(BASE_URL + '?output=csv&Sheet=' + sheet);
+}
+
+// =====================================================================
+// STATE
+// =====================================================================
+let DATA = {};
+let allUsers = [];
+let charts = {};
+
+// =====================================================================
+// BOOT
+// =====================================================================
+document.addEventListener('DOMContentLoaded', () => {
+  const saved = localStorage.getItem('tp_csv_base');
+  if (saved) document.getElementById('csvUrlInput').value = saved;
+  loadAllData();
+});
+
+function saveCsvUrl() {
+  const val = document.getElementById('csvUrlInput').value.trim();
+  if (val) { localStorage.setItem('tp_csv_base', val); showToast('URL guardado!'); loadAllData(); }
+}
+
+// =====================================================================
+// LOAD DATA
+// =====================================================================
+async function loadAllData() {
+  document.getElementById('loadingScreen').style.display = 'flex';
+  setStatus('A carregar...', false);
+
+  try {
+    const raw = await fetchCsv(SHEETS.dashboard);
+    parseAllTables(raw);
+    renderAll();
+    setStatus('Dados actualizados · CSV ao vivo', true);
+    document.getElementById('updateTime').textContent = 'Actualizado às ' + new Date().toLocaleTimeString('pt', {hour:'2-digit',minute:'2-digit'});
+  } catch(e) {
+    console.error(e);
+    showError('Não foi possível carregar os dados do SharePoint. Verifica a ligação ou o URL em ⚙ Config. Detalhe: ' + e.message);
+    setStatus('Erro de ligação', false);
+    renderFallback(); // render with static data so dashboard still works
+  } finally {
+    document.getElementById('loadingScreen').style.display = 'none';
+  }
+}
+
+async function fetchCsv(sheet) {
+  const url = csvUrl(sheet);
+  return new Promise((resolve, reject) => {
+    Papa.parse(url, {
+      download: true,
+      skipEmptyLines: false,
+      complete: r => resolve(r.data),
+      error: e => reject(new Error(e.message || 'Erro ao ler CSV'))
+    });
+  });
+}
+
+// =====================================================================
+// PARSE — interpreta as pivots lado a lado no CSV
+// =====================================================================
+function parseAllTables(rows) {
+  // The sheet has multiple pivot tables side by side.
+  // We detect each by their header row keywords.
+  // Structure from CSV analysis:
+  //   Col A-B: UsersTerminated | Col C-D: TbTerminatedTipo | Col E-F: TbEdificios
+  //   Col G-H: TbWarehouse | Col I-J: TbStaging | Col K-L: TbApartamentos
+  //   Col M-N: TbAVT | Col O-P: TbWAHA | Col Q-S: WAH STATUS (Em Rec)
+  //   Col T-V: Sem Rec | Col W-?: List assets per user | Col last: Monthly recover
+
+  DATA.edificios = [];
+  DATA.wah = [];
+  DATA.warehouse = [];
+  DATA.staging = [];
+  DATA.apartamentos = [];
+  DATA.avt = [];
+  DATA.terminadosTipo = [];
+  DATA.recover = [];
+  DATA.users = {};  // {id: {assets:[], data:''}}
+  DATA.emRecuperacao = [];
+  DATA.semRecuperacao = [];
+
+  // Find header row (row with "Row Labels" repeated)
+  let headerRow = -1;
+  for (let i = 0; i < rows.length; i++) {
+    if (rows[i].join('').includes('Row Labels')) { headerRow = i; break; }
+  }
+  if (headerRow < 0) { renderFallback(); return; }
+
+  // Find column positions by scanning row 2 (location labels) and row headerRow
+  const locRow = rows.find(r => r.some(c => c === 'EDIFICIOS' || c === 'WAREHOUSE'));
+  const hdr = rows[headerRow];
+
+  // Find each pivot by scanning for "Row Labels" in header row
+  const pivotCols = [];
+  hdr.forEach((cell, ci) => {
+    if (cell === 'Row Labels') pivotCols.push(ci);
+  });
+
+  // Map pivot index → table name based on location row labels above
+  // Order from CSV: UsersTerminated(0), TbTerminatedTipo(1), TbEdificios(2),
+  //                 TbWarehouse(3), TbStaging(4), TbApartamentos(5), TbAVT(6), TbWAHA(7),
+  //                 EmRec(8), SemRec(9)
+  const tableMap = ['users','terminadosTipo','edificios','warehouse','staging','apartamentos','avt','wah','emRec','semRec'];
+
+  // Parse each pivot
+  pivotCols.forEach((colStart, pivotIdx) => {
+    const tableName = tableMap[pivotIdx] || ('extra'+pivotIdx);
+    const valCol = colStart + 1;
+    const items = [];
+    for (let r = headerRow + 1; r < rows.length; r++) {
+      const label = (rows[r][colStart] || '').trim();
+      const val = parseInt((rows[r][valCol] || '').replace(/[^0-9]/g,''));
+      if (!label || label === 'Grand Total') continue;
+      if (!isNaN(val) && val > 0) items.push({tipo: label, qtd: val});
+    }
+
+    if (tableName === 'edificios') DATA.edificios = items.sort((a,b)=>b.qtd-a.qtd);
+    else if (tableName === 'wah') DATA.wah = items.sort((a,b)=>b.qtd-a.qtd);
+    else if (tableName === 'warehouse') DATA.warehouse = items.sort((a,b)=>b.qtd-a.qtd);
+    else if (tableName === 'staging') DATA.staging = items.sort((a,b)=>b.qtd-a.qtd);
+    else if (tableName === 'apartamentos') DATA.apartamentos = items.sort((a,b)=>b.qtd-a.qtd);
+    else if (tableName === 'avt') DATA.avt = items.sort((a,b)=>b.qtd-a.qtd);
+    else if (tableName === 'terminadosTipo') DATA.terminadosTipo = items.sort((a,b)=>b.qtd-a.qtd);
+    else if (tableName === 'users') {
+      items.forEach(i => {
+        DATA.users[i.tipo] = {id: i.tipo, qtd: i.qtd, data: '—', assets: []};
+      });
+    }
+  });
+
+  // Parse "List of assets per user" columns (last section in CSV)
+  // Find the column with header "List of assets per user"
+  let listCol = -1;
+  for (let ci = 0; ci < (rows[0]||[]).length; ci++) {
+    for (let ri = 0; ri < Math.min(10, rows.length); ri++) {
+      if ((rows[ri][ci]||'').includes('List of assets per user')) { listCol = ci; break; }
+    }
+    if (listCol >= 0) break;
+  }
+
+  if (listCol >= 0) {
+    let currentUser = null;
+    for (let r = headerRow + 1; r < rows.length; r++) {
+      const cell = (rows[r][listCol] || '').trim();
+      if (!cell) continue;
+      // User IDs are numeric
+      if (/^\d{6,8}$/.test(cell)) {
+        currentUser = cell;
+        if (!DATA.users[currentUser]) DATA.users[currentUser] = {id:currentUser, qtd:0, data:'—', assets:[]};
+      } else if (currentUser && cell.match(/^[\d\/]+$/) && cell.includes('/')) {
+        // Date
+        DATA.users[currentUser].data = cell;
+      } else if (currentUser && cell.length > 3) {
+        // Asset code
+        DATA.users[currentUser].assets.push(cell);
+        DATA.users[currentUser].qtd = DATA.users[currentUser].assets.length;
+      }
+    }
+  }
+
+  // Parse monthly recover table (last columns)
+  // Find "Month" header
+  let monthCol = -1;
+  rows.forEach((row, ri) => {
+    row.forEach((cell, ci) => {
+      if (cell === 'Month') monthCol = ci;
+    });
+  });
+
+  if (monthCol >= 0) {
+    const monthHeaderRow = rows.findIndex(r => r[monthCol] === 'Month');
+    if (monthHeaderRow >= 0) {
+      for (let r = monthHeaderRow + 1; r < rows.length; r++) {
+        const mes = (rows[r][monthCol] || '').trim();
+        if (!mes) continue;
+        DATA.recover.push({
+          mes,
+          resigns: parseInt(rows[r][monthCol+1]) || 0,
+          equip: parseInt(rows[r][monthCol+2]) || 0,
+          recup: parseInt(rows[r][monthCol+3]) || 0,
+          proc: parseInt(rows[r][monthCol+4]) || 0,
+          pct: parseFloat(rows[r][monthCol+5]) || 0,
+          val: (rows[r][monthCol+6] || '—').trim()
+        });
+      }
+    }
+  }
+
+  // Parse Em/Sem recuperação from WAH STATUS cols
+  let emRecCol = -1, semRecCol = -1;
+  rows.forEach(row => {
+    row.forEach((cell, ci) => {
+      if (cell === 'RETENTION STATUS' && (rows[rows.indexOf(row)+1]||[])[ci] === '#N/A') semRecCol = ci;
+    });
+  });
+
+  // Build Em/Sem rec from users data + proc column in recover
+  allUsers = Object.values(DATA.users).sort((a,b) => b.qtd - a.qtd);
+
+  // If parse failed, use static data
+  if (DATA.edificios.length === 0) renderFallback();
+}
+
+function renderFallback() {
+  // Static data from CSV paste — used if live fetch fails
+  DATA.edificios = [{tipo:'Monitor',qtd:13003},{tipo:'Cadeira',qtd:9589},{tipo:'MiniPC',qtd:7346},{tipo:'Secretária',qtd:3194},{tipo:'Mesa de cafeteria',qtd:806},{tipo:'Cadeira de cafeteria',qtd:1085},{tipo:'Armário',qtd:992},{tipo:'Portátil',qtd:1099},{tipo:'Posto de Trabalho',qtd:1035},{tipo:'Thin Client',qtd:1044},{tipo:'Mesa',qtd:778},{tipo:'Mobiliário',qtd:532},{tipo:'Desktop',qtd:416},{tipo:'TV\'s',qtd:399},{tipo:'Tablets',qtd:104},{tipo:'Banco Corrido',qtd:86},{tipo:'Bloco Gavetas',qtd:81},{tipo:'Docks',qtd:570},{tipo:'Routers',qtd:57},{tipo:'Móvel Standard',qtd:36},{tipo:'Outros',qtd:92},{tipo:'Diversos',qtd:39}].sort((a,b)=>b.qtd-a.qtd);
+  DATA.wah = [{tipo:'Monitor',qtd:11500},{tipo:'MiniPC',qtd:5315},{tipo:'Portátil',qtd:3165},{tipo:'Cadeira',qtd:486},{tipo:'Docks',qtd:469},{tipo:'Thin Client',qtd:372},{tipo:'Outros',qtd:498},{tipo:'Routers',qtd:104},{tipo:'Desktop',qtd:222},{tipo:'Tablets',qtd:50},{tipo:'Mesa',qtd:92},{tipo:'TV\'s',qtd:38},{tipo:'Secretária',qtd:13}].sort((a,b)=>b.qtd-a.qtd);
+  DATA.warehouse = [{tipo:'Monitor',qtd:873},{tipo:'Docks',qtd:239},{tipo:'Portátil',qtd:155},{tipo:'MiniPC',qtd:53},{tipo:'Outros',qtd:82},{tipo:'Thin Client',qtd:59},{tipo:'Desktop',qtd:6},{tipo:'Tablets',qtd:1},{tipo:'Secretária',qtd:3}].sort((a,b)=>b.qtd-a.qtd);
+  DATA.staging = [{tipo:'MiniPC',qtd:804},{tipo:'Portátil',qtd:230},{tipo:'Monitor',qtd:72},{tipo:'Thin Client',qtd:73},{tipo:'Routers',qtd:2},{tipo:'Desktop',qtd:7},{tipo:'Cadeira',qtd:4}].sort((a,b)=>b.qtd-a.qtd);
+  DATA.apartamentos = [{tipo:'Cadeira',qtd:3972},{tipo:'Routers',qtd:2872},{tipo:'Cadeira de cafeteria',qtd:711},{tipo:'Secretária',qtd:59},{tipo:'Mesa de cafeteria',qtd:68},{tipo:'Posto de Trabalho',qtd:17},{tipo:'Outros',qtd:17},{tipo:'Mobiliário',qtd:20}].sort((a,b)=>b.qtd-a.qtd);
+  DATA.avt = [{tipo:'Monitor',qtd:627},{tipo:'MiniPC',qtd:480},{tipo:'Thin Client',qtd:372},{tipo:'Routers',qtd:121},{tipo:'Secretária',qtd:121},{tipo:'Docks',qtd:121},{tipo:'Mesa',qtd:92},{tipo:'Portátil',qtd:210},{tipo:'Banco Corrido',qtd:117},{tipo:'Outros',qtd:75},{tipo:'Mesa de cafeteria',qtd:41},{tipo:'Desktop',qtd:3},{tipo:'Cadeira',qtd:65}].sort((a,b)=>b.qtd-a.qtd);
+  DATA.terminadosTipo = [{tipo:'Monitor',qtd:839},{tipo:'MiniPC',qtd:288},{tipo:'Portátil',qtd:107},{tipo:'Outros',qtd:69},{tipo:'Cadeira',qtd:47},{tipo:'Thin Client',qtd:29},{tipo:'Docks',qtd:25},{tipo:'Desktop',qtd:25},{tipo:'Secretária',qtd:3},{tipo:'Tablets',qtd:3}];
+  DATA.recover = [
+    {mes:'01 — Janeiro',resigns:491,equip:220,recup:184,proc:36,pct:83.6,val:'15.411,15 €'},
+    {mes:'02 — Fevereiro',resigns:429,equip:216,recup:185,proc:31,pct:85.6,val:'21.882,80 €'},
+    {mes:'03 — Março',resigns:565,equip:260,recup:193,proc:67,pct:74.2,val:'19.012,31 €'},
+    {mes:'04 — Abril',resigns:333,equip:137,recup:12,proc:0,pct:8.8,val:'—'},
+    {mes:'Grand Total',resigns:1818,equip:833,recup:574,proc:134,pct:null,val:'56.306,26 €'},
+  ];
+  // Sample users from CSV
+  allUsers = [
+    {id:'482275',qtd:1,data:'09/25/2025',assets:['TP.MPC.90758']},
+    {id:'485017',qtd:1,data:'11/30/2025',assets:['TP.CAD.03637']},
+    {id:'763153',qtd:6,data:'11/30/2025',assets:['TP.CPT.31496','TP.MOT.89843','TP.PRT.109071','TP.MOT.25147','TP.MOT.48024','TP.MPC.63326']},
+    {id:'742349',qtd:3,data:'11/30/2025',assets:['TP.MOT.62593','TP.PRT.74231','TP.PRT.96835']},
+    {id:'1271290',qtd:6,data:'—',assets:['TP.MOT.27271','TP.MOT.49340','TP.MPC.115399','TP.THC.113163','TP.PRT.67267','TP.MPC.121214']},
+    {id:'3399417',qtd:6,data:'03/07/2026',assets:['TP.MOT.110215','TP.MOT.16934','TP.MOT.16935','TP.MOT.84996','TP.MPC.91210','TP.PRT.57450']},
+  ].sort((a,b)=>b.qtd-a.qtd);
+  DATA.emRecuperacao = allUsers.filter(u => u.data !== '—' && parseInt(u.data.split('/')[2]) >= 2025).slice(0,20).map(u=>({...u,estado:'In Process'}));
+  DATA.semRecuperacao = allUsers.filter(u => u.data === '—').slice(0,20).map(u=>({...u,estado:'Sem processo'}));
+}
+
+// =====================================================================
+// RENDER ALL
+// =====================================================================
+function renderAll() {
+  renderOverviewCards();
+  renderLocationTables();
+  renderTerminated();
+  renderRecover();
+  renderUsersTable(allUsers);
+  renderCharts();
+  document.getElementById('tbadge').textContent = sumQtd(DATA.terminadosTipo);
+}
+
+function sumQtd(arr) { return arr.reduce((s,r)=>s+r.qtd,0).toLocaleString('pt'); }
+
+// ── Overview Cards ──
+function renderOverviewCards() {
+  const totEdif = DATA.edificios.reduce((s,r)=>s+r.qtd,0);
+  const totWah  = DATA.wah.reduce((s,r)=>s+r.qtd,0);
+  const totWh   = DATA.warehouse.reduce((s,r)=>s+r.qtd,0);
+  const totStg  = DATA.staging.reduce((s,r)=>s+r.qtd,0);
+  const totAp   = DATA.apartamentos.reduce((s,r)=>s+r.qtd,0);
+  const totAvt  = DATA.avt.reduce((s,r)=>s+r.qtd,0);
+  const grand   = totEdif+totWah+totWh+totStg+totAp+totAvt;
+
+  document.getElementById('overviewCards').innerHTML = [
+    {lbl:'TbEdificios',val:totEdif.toLocaleString('pt'),sub:`${((totEdif/grand)*100).toFixed(1)}% do total`,kc:'var(--blue)'},
+    {lbl:'TbWAHA — Work at Home',val:totWah.toLocaleString('pt'),sub:`${((totWah/grand)*100).toFixed(1)}% do total`,kc:'#6d28d9'},
+    {lbl:'TbApartamentos',val:totAp.toLocaleString('pt'),sub:`${((totAp/grand)*100).toFixed(1)}% do total`,kc:'#0e7490'},
+    {lbl:'TbWarehouse',val:totWh.toLocaleString('pt'),sub:`${((totWh/grand)*100).toFixed(1)}% do total`,kc:'var(--green)'},
+    {lbl:'TbStaging',val:totStg.toLocaleString('pt'),sub:`${((totStg/grand)*100).toFixed(1)}% do total`,kc:'var(--amber)'},
+    {lbl:'TbAVT',val:totAvt.toLocaleString('pt'),sub:`${((totAvt/grand)*100).toFixed(1)}% do total`,kc:'var(--slate)'},
+  ].map(c=>`<div class="kcard" style="--kc:${c.kc}"><div class="kcard-label">${c.lbl}</div><div class="kcard-value">${c.val}</div><div class="kcard-sub">${c.sub}</div></div>`).join('');
+
+  const termTotal = DATA.terminadosTipo.reduce((s,r)=>s+r.qtd,0);
+  const recGrand  = DATA.recover.find(r=>r.mes==='Grand Total') || {};
+  document.getElementById('recoveryCards').innerHTML = [
+    {lbl:'Terminated com Assets',val:(termTotal).toLocaleString('pt'),sub:'Equipamentos por recuperar',kc:'var(--red)'},
+    {lbl:'Em Processo',val:(recGrand.proc||134).toLocaleString('pt'),sub:'Recuperação em curso',kc:'var(--amber)',btn:'em_rec'},
+    {lbl:'Recuperados (acumulado)',val:(recGrand.recup||574).toLocaleString('pt'),sub:'Jan–Abr 2025',kc:'var(--green)'},
+    {lbl:'Value Retained',val:recGrand.val||'56.306€',sub:'Valor estimado retido',kc:'var(--green)'},
+    {lbl:'Recover % Abril',val:'8,8%',sub:'▼ vs Março 74,2%',kc:'var(--red)'},
+    {lbl:'Total Resigns (Jan–Abr)',val:(recGrand.resigns||1818).toLocaleString('pt'),sub:'Colaboradores que saíram',kc:'var(--blue)'},
+  ].map(c=>`<div class="kcard" style="--kc:${c.kc}">
+    <div class="kcard-label">${c.lbl}</div>
+    <div class="kcard-value">${c.val}</div>
+    <div class="kcard-sub">${c.sub}</div>
+    ${c.btn?`<button class="btn-drill" style="margin-top:8px" onclick="openDrill('${c.btn}')">Ver lista ↗</button>`:''}
+  </div>`).join('');
+}
+
+// ── Location Tables ──
+function renderLocTable(tbId, lblId, data, color, chipCls) {
+  const total = data.reduce((s,r)=>s+r.qtd,0);
+  document.getElementById(lblId).textContent = total.toLocaleString('pt')+' assets';
+  document.getElementById(tbId).innerHTML = data.map(r=>{
+    const pct = ((r.qtd/total)*100).toFixed(1);
+    const w = Math.round(r.qtd/total*100)+'%';
+    return `<tr>
+      <td style="font-weight:500">${r.tipo}</td>
+      <td class="mono" style="color:${color}">${r.qtd.toLocaleString('pt')}</td>
+      <td><div class="bar-wrap"><span class="mono" style="min-width:36px;color:var(--muted)">${pct}%</span><div class="bar-bg"><div class="bar-fill" style="width:${w};background:${color}"></div></div></div></td>
+      <td style="display:none"></td>
+    </tr>`;
+  }).join('');
+}
+function renderLocTableSmall(tbId, lblId, data, color, chipCls) {
+  const total = data.reduce((s,r)=>s+r.qtd,0);
+  document.getElementById(lblId).textContent = total.toLocaleString('pt')+' assets';
+  document.getElementById(tbId).innerHTML = data.map(r=>`<tr>
+    <td style="font-weight:500;font-size:11px">${r.tipo}</td>
+    <td class="mono" style="color:${color};font-size:11px">${r.qtd.toLocaleString('pt')}</td>
+    <td class="mono" style="color:var(--muted);font-size:10px">${((r.qtd/total)*100).toFixed(1)}%</td>
+  </tr>`).join('');
+}
+function renderLocationTables() {
+  renderLocTable('tb_edif','lbl_edif',DATA.edificios,'var(--blue)','chip-blue');
+  renderLocTable('tb_wah','lbl_wah',DATA.wah,'#6d28d9','chip-purple');
+  renderLocTableSmall('tb_wh','lbl_wh',DATA.warehouse,'var(--green)','chip-green');
+  renderLocTableSmall('tb_stg','lbl_stg',DATA.staging,'var(--amber)','chip-amber');
+  renderLocTableSmall('tb_ap','lbl_ap',DATA.apartamentos,'var(--teal)','chip-blue');
+  renderLocTableSmall('tb_avt','lbl_avt',DATA.avt,'var(--slate)','chip-slate');
+}
+
+// ── Terminated ──
+function renderTerminated() {
+  const total = DATA.terminadosTipo.reduce((s,r)=>s+r.qtd,0);
+  document.getElementById('lbl_term').textContent = total.toLocaleString('pt')+' assets';
+  const proc = (DATA.recover.find(r=>r.mes==='Grand Total')||{}).proc || 134;
+  const recup = (DATA.recover.find(r=>r.mes==='Grand Total')||{}).recup || 574;
+  const semRec = Math.max(0, total - proc - recup);
+  document.getElementById('termCards').innerHTML = `
+    <div class="kcard" style="--kc:var(--red)"><div class="kcard-label">Total Assets Terminated</div><div class="kcard-value">${total.toLocaleString('pt')}</div><div class="kcard-sub">Equipamentos por recuperar</div></div>
+    <div class="kcard" style="--kc:var(--amber)"><div class="kcard-label">TbEmRecuperação</div><div class="kcard-value">${proc.toLocaleString('pt')}</div><div class="kcard-sub">Em processo activo</div><button class="btn-drill" style="margin-top:8px" onclick="openDrill('em_rec')">Ver lista ↗</button></div>
+    <div class="kcard" style="--kc:var(--red)"><div class="kcard-label">TbSemRecuperação</div><div class="kcard-value">${semRec.toLocaleString('pt')}</div><div class="kcard-sub">Sem processo iniciado</div><button class="btn-drill" style="margin-top:8px" onclick="openDrill('sem_rec')">Ver lista ↗</button></div>
+    <div class="kcard" style="--kc:var(--green)"><div class="kcard-label">Recuperados</div><div class="kcard-value">${recup.toLocaleString('pt')}</div><div class="kcard-sub">Jan–Abr 2025</div></div>
+  `;
+  document.getElementById('tb_term').innerHTML = DATA.terminadosTipo.map(r=>{
+    const pct = ((r.qtd/total)*100).toFixed(1);
+    const w = Math.round(r.qtd/total*100)+'%';
+    return `<tr>
+      <td style="font-weight:500">${r.tipo}</td>
+      <td class="mono" style="color:var(--red)">${r.qtd.toLocaleString('pt')}</td>
+      <td><div class="bar-wrap"><span class="mono" style="min-width:36px;color:var(--muted)">${pct}%</span><div class="bar-bg"><div class="bar-fill" style="width:${w};background:var(--red)"></div></div></div></td>
+      <td style="display:none"></td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Recover ──
+function renderRecover() {
+  const months = DATA.recover.filter(r=>r.mes!=='Grand Total');
+  const grand = DATA.recover.find(r=>r.mes==='Grand Total');
+  document.getElementById('lbl_rec').textContent = (grand&&grand.recup?((grand.recup/grand.equip)*100).toFixed(1)+'% taxa média':'—');
+  document.getElementById('tb_rec').innerHTML = DATA.recover.map(r=>{
+    const isGrand = r.mes==='Grand Total';
+    const pctColor = r.pct===null?'var(--text)':r.pct>=75?'var(--green)':r.pct>=40?'var(--amber)':'var(--red)';
+    const bw = r.pct ? Math.round(r.pct)+'%':'0%';
+    return `<tr style="${isGrand?'background:var(--s2);font-weight:600':''}">
+      <td class="mono" style="font-size:11px">${r.mes}</td>
+      <td class="mono">${r.resigns||'—'}</td>
+      <td class="mono">${r.equip||'—'}</td>
+      <td class="mono" style="color:var(--green)">${r.recup||'—'}</td>
+      <td class="mono" style="color:var(--amber)">${r.proc||'—'}</td>
+      <td><div class="bar-wrap">${r.pct!==null?`<span class="mono" style="color:${pctColor};min-width:40px">${r.pct}%</span><div class="bar-bg"><div class="bar-fill" style="width:${bw};background:${pctColor}"></div></div>`:'—'}</div></td>
+      <td class="mono" style="color:var(--green)">${r.val}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Users ──
+function renderUsersTable(data) {
+  document.getElementById('userCount').textContent = data.length+' colaboradores';
+  document.getElementById('tb_users').innerHTML = data.map(u=>`<tr>
+    <td class="mono" style="color:var(--blue);font-size:11px">${u.id}</td>
+    <td><span class="chip chip-blue">${u.qtd} asset${u.qtd>1?'s':''}</span></td>
+    <td class="mono" style="color:var(--muted);font-size:11px">${u.data||'—'}</td>
+    <td><button class="btn-drill" onclick='openUserDetail(${JSON.stringify(u)})'>Ver assets ↗</button></td>
+  </tr>`).join('');
+}
+function filterUsers() {
+  const q = document.getElementById('searchUser').value.toLowerCase();
+  renderUsersTable(allUsers.filter(u=>
+    u.id.toLowerCase().includes(q) ||
+    (u.assets||[]).some(a=>a.toLowerCase().includes(q))
+  ));
+}
+
+// ── Charts ──
+function renderCharts() {
+  Chart.defaults.color='#64748b';
+  Chart.defaults.font.family="'Plus Jakarta Sans',sans-serif";
+  Chart.defaults.font.size=10;
+  const tip={backgroundColor:'#fff',borderColor:'#e2e6f0',borderWidth:1,titleColor:'#1a2038',bodyColor:'#64748b'};
+  const grid={color:'rgba(0,0,0,.04)'};
+  const ticks={color:'#94a3b8'};
+
+  const totEdif = DATA.edificios.reduce((s,r)=>s+r.qtd,0);
+  const totWah  = DATA.wah.reduce((s,r)=>s+r.qtd,0);
+  const totWh   = DATA.warehouse.reduce((s,r)=>s+r.qtd,0);
+  const totStg  = DATA.staging.reduce((s,r)=>s+r.qtd,0);
+  const totAp   = DATA.apartamentos.reduce((s,r)=>s+r.qtd,0);
+  const totAvt  = DATA.avt.reduce((s,r)=>s+r.qtd,0);
+
+  ['c_loc','c_rec_bar','c_rec_line','c_rec_vol'].forEach(id=>{
+    if(charts[id]){charts[id].destroy();}
+  });
+
+  charts.c_loc = new Chart(document.getElementById('c_loc'),{
+    type:'doughnut',
+    data:{labels:['Edifícios','WAHA','Apartamentos','Warehouse','Staging','AVT'],
+      datasets:[{data:[totEdif,totWah,totAp,totWh,totStg,totAvt],
+        backgroundColor:['#3b6ef8','#6d28d9','#0e7490','#15803d','#b45309','#475569'],
+        borderColor:'#f4f6fb',borderWidth:3,hoverOffset:6}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'62%',
+      plugins:{legend:{display:true,position:'bottom',labels:{color:'#64748b',font:{size:9},boxWidth:8,padding:10}},tooltip:{...tip}}}
+  });
+
+  const months = DATA.recover.filter(r=>r.mes!=='Grand Total');
+  const labels = months.map(r=>r.mes.replace(/^\d+ — /,''));
+  const pcts   = months.map(r=>r.pct||0);
+  const colors = pcts.map(p=>p>=75?'#15803d':p>=40?'#b45309':'#c0392b');
+
+  charts.c_rec_bar = new Chart(document.getElementById('c_rec_bar'),{
+    type:'bar',
+    data:{labels,datasets:[{label:'Recover %',data:pcts,backgroundColor:colors,borderRadius:6,borderSkipped:false}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{...tip,callbacks:{label:ctx=>ctx.raw+'%'}}},
+      scales:{x:{grid:{display:false},ticks},y:{grid,ticks,min:0,max:100,ticks:{...ticks,callback:v=>v+'%'}}}}
+  });
+
+  charts.c_rec_line = new Chart(document.getElementById('c_rec_line'),{
+    type:'line',
+    data:{labels,datasets:[{label:'Recover %',data:pcts,
+      borderColor:'#3b6ef8',backgroundColor:'rgba(59,110,248,.08)',
+      fill:true,tension:.35,pointRadius:5,pointBackgroundColor:colors,pointBorderColor:'#fff',pointBorderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{...tip,callbacks:{label:ctx=>ctx.raw+'%'}}},
+      scales:{x:{grid:{display:false},ticks},y:{grid,ticks,min:0,max:100,ticks:{...ticks,callback:v=>v+'%'}}}}
+  });
+
+  charts.c_rec_vol = new Chart(document.getElementById('c_rec_vol'),{
+    type:'bar',
+    data:{labels,datasets:[
+      {label:'Resigns',data:months.map(r=>r.resigns),backgroundColor:'rgba(59,110,248,.5)',borderRadius:4,borderSkipped:false},
+      {label:'Equipamentos',data:months.map(r=>r.equip),backgroundColor:'rgba(180,83,9,.5)',borderRadius:4,borderSkipped:false},
+      {label:'Recuperados',data:months.map(r=>r.recup),backgroundColor:'rgba(21,128,61,.6)',borderRadius:4,borderSkipped:false}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:true,position:'bottom',labels:{color:'#64748b',font:{size:9},boxWidth:8,padding:10}},tooltip:{...tip}},
+      scales:{x:{grid:{display:false},ticks},y:{grid,ticks}}}
+  });
+}
+
+// =====================================================================
+// MODALS
+// =====================================================================
+function openDrill(type) {
+  const isEm = type==='em_rec';
+  const data = isEm ? DATA.emRecuperacao : DATA.semRecuperacao;
+  const chipCls = isEm ? 'chip-amber' : 'chip-red';
+  const estado = isEm ? 'In Process' : 'Sem processo';
+  document.getElementById('drillTitle').textContent = isEm ? 'TbEmRecuperação — Em Processo' : 'TbSemRecuperação — Sem Processo';
+  document.getElementById('drillSub').textContent = (data.length||'—')+' colaboradores terminados · clica numa linha para ver os assets';
+  document.getElementById('drillBody').innerHTML = (data.length ? data : allUsers.slice(0,30)).map(u=>`<tr>
+    <td class="mono" style="font-size:11px;color:var(--blue);padding:8px 14px;border-bottom:1px solid var(--border)">${u.id}</td>
+    <td style="padding:8px 14px;border-bottom:1px solid var(--border)"><span class="chip chip-blue">${u.qtd} asset${u.qtd>1?'s':''}</span></td>
+    <td class="mono" style="font-size:11px;color:var(--muted);padding:8px 14px;border-bottom:1px solid var(--border)">${u.data||'—'}</td>
+    <td style="padding:8px 14px;border-bottom:1px solid var(--border)"><span class="chip ${chipCls}">${estado}</span></td>
+  </tr>`).join('');
+  document.getElementById('drillOverlay').classList.add('open');
+}
+function closeDrill(){document.getElementById('drillOverlay').classList.remove('open');}
+
+function openUserDetail(u) {
+  document.getElementById('userModalTitle').textContent = 'Colaborador '+u.id;
+  document.getElementById('userModalSub').textContent = u.qtd+' asset(s) · Data fim de contrato: '+(u.data||'—');
+  const assets = u.assets && u.assets.length ? u.assets : ['Sem detalhe disponível — actualiza o CSV'];
+  document.getElementById('userModalBody').innerHTML = assets.map(a=>`<tr><td class="mono" style="font-size:11px;color:var(--blue);padding:9px 14px;border-bottom:1px solid var(--border)">${a}</td></tr>`).join('');
+  document.getElementById('userOverlay').classList.add('open');
+}
+function closeUserModal(){document.getElementById('userOverlay').classList.remove('open');}
+
+function openShare(){document.getElementById('shareOverlay').classList.add('open');}
+function closeShare(){document.getElementById('shareOverlay').classList.remove('open');}
+
+['drillOverlay','userOverlay','shareOverlay'].forEach(id=>{
+  document.getElementById(id).addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
+});
+
+function copyLink(){
+  navigator.clipboard.writeText(window.location.href)
+    .then(()=>showToast('✓ Link copiado!'))
+    .catch(()=>showToast('Ctrl+C para copiar'));
+}
+
+// =====================================================================
+// HELPERS
+// =====================================================================
+function switchTab(id, el) {
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
+  if(el) el.classList.add('active');
+  document.getElementById('tab-'+id).classList.add('active');
+}
+function setStatus(msg, ok) {
+  document.getElementById('statusText').textContent = msg;
+  document.getElementById('statusPill').style.color = ok ? 'var(--green)' : 'var(--amber)';
+}
+function showError(msg){
+  const b=document.getElementById('errorBanner');
+  b.style.display='block';b.textContent=msg;
+}
+function showToast(m){
+  const t=document.getElementById('toast');
+  t.textContent=m;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2400);
+}
+</script>
+</body>
+</html>
