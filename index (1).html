@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TP KPI Hub — Teleperformance Portugal Logistics</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f8f9fc;--s1:#fff;--s2:#f1f4f9;--border:#e4e8f0;
+  --text:#1a2035;--muted:#6b7280;--sub:#9ca3af;
+  --blue:#2563eb;--blue-s:rgba(37,99,235,.08);
+  --green:#16a34a;--green-s:rgba(22,163,74,.08);
+  --amber:#d97706;--amber-s:rgba(217,119,6,.08);
+  --red:#dc2626;--red-s:rgba(220,38,38,.08);
+  --purple:#7c3aed;--purple-s:rgba(124,58,237,.08);
+  --teal:#0891b2;--teal-s:rgba(8,145,178,.08);
+  --mono:'JetBrains Mono',monospace;
+  --sans:'Inter',sans-serif;
+}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh;}
+
+.topbar{
+  background:#fff;border-bottom:1px solid var(--border);
+  padding:0 2rem;height:56px;
+  display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;z-index:50;
+}
+.brand{display:flex;align-items:center;gap:10px;}
+.brand-dot{width:8px;height:8px;border-radius:50%;background:var(--blue);animation:pulse 2s ease-in-out infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.brand-name{font-size:14px;font-weight:600;}
+.brand-sub{font-size:10px;color:var(--muted);font-family:var(--mono);}
+.topbar-right{display:flex;align-items:center;gap:10px;}
+.status{font-size:10px;font-family:var(--mono);padding:3px 8px;border-radius:4px;}
+.status-live{color:var(--green);background:var(--green-s);}
+.status-cache{color:var(--amber);background:var(--amber-s);}
+.status-err{color:var(--red);background:var(--red-s);}
+.btn-refresh{font-size:11px;font-weight:500;padding:5px 12px;background:var(--s2);color:var(--muted);border:1px solid var(--border);border-radius:6px;cursor:pointer;}
+.btn-refresh:hover{color:var(--text);}
+
+.main{max-width:1100px;margin:0 auto;padding:1.5rem 2rem;}
+
+/* loading */
+#loadingBar{height:3px;background:var(--blue);width:0;transition:width .3s;position:fixed;top:0;left:0;z-index:100;}
+
+.section{margin-bottom:2rem;}
+.section-title{
+  font-size:10px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.1em;color:var(--muted);
+  margin-bottom:.75rem;padding-bottom:.5rem;
+  border-bottom:1px solid var(--border);
+}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px;}
+.card{background:var(--s1);border:1px solid var(--border);border-radius:8px;padding:.9rem 1rem;border-left:3px solid var(--c,var(--blue));}
+.card-label{font-size:10px;color:var(--muted);font-weight:500;margin-bottom:5px;}
+.card-value{font-size:24px;font-weight:600;color:var(--text);font-family:var(--mono);line-height:1;}
+.card-sub{font-size:10px;color:var(--c,var(--blue));margin-top:4px;font-weight:500;}
+
+.tbl-card{background:var(--s1);border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+.tbl-top{padding:.75rem 1rem;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.search{flex:1;min-width:180px;font-size:12px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;outline:none;font-family:var(--sans);background:var(--s2);color:var(--text);transition:border-color .15s;}
+.search:focus{border-color:var(--blue);}
+.badge{display:inline-block;font-size:9px;font-weight:700;font-family:var(--mono);padding:2px 7px;border-radius:3px;white-space:nowrap;}
+.b-blue{color:var(--blue);background:var(--blue-s);}
+.b-green{color:var(--green);background:var(--green-s);}
+.b-amber{color:var(--amber);background:var(--amber-s);}
+.b-red{color:var(--red);background:var(--red-s);}
+.scroll{overflow-x:auto;max-height:340px;overflow-y:auto;}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+th{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:9px 14px;text-align:left;border-bottom:1px solid var(--border);background:var(--s2);position:sticky;top:0;white-space:nowrap;}
+td{padding:9px 14px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:top;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:var(--s2);}
+.mono{font-family:var(--mono);font-size:11px;}
+.expand{font-size:10px;color:var(--blue);background:none;border:none;cursor:pointer;padding:0;text-decoration:underline;display:block;margin-top:2px;}
+.pct-wrap{display:flex;align-items:center;gap:6px;}
+.bar-bg{flex:1;height:5px;background:var(--s2);border-radius:3px;min-width:50px;overflow:hidden;}
+.bar-fill{height:100%;border-radius:3px;}
+
+footer{text-align:center;padding:2rem;font-size:10px;color:var(--sub);font-family:var(--mono);border-top:1px solid var(--border);margin-top:1rem;}
+</style>
+</head>
+<body>
+
+<div id="loadingBar"></div>
+
+<div class="topbar">
+  <div class="brand">
+    <span class="brand-dot"></span>
+    <div>
+      <div class="brand-name">TP KPI Hub</div>
+      <div class="brand-sub">Teleperformance Portugal · Logistics</div>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <span class="status" id="statusBadge">A carregar...</span>
+    <span style="font-size:10px;color:var(--sub);font-family:var(--mono)" id="updatedAt">—</span>
+    <button class="btn-refresh" onclick="loadData()">↻ Actualizar</button>
+  </div>
+</div>
+
+<div class="main">
+
+  <div class="section">
+    <div class="section-title">Total de Assets por Localização</div>
+    <div class="grid" id="gridTotais"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Colaboradores Terminados com Assets</div>
+    <div class="grid" id="gridTerm"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Listagem de Users Terminated e Respectivos Assets</div>
+    <div class="tbl-card">
+      <div class="tbl-top">
+        <input class="search" id="sUsers" type="text" placeholder="Pesquisar por ID ou código de asset..." oninput="fUsers()">
+        <span class="badge b-blue" id="cUsers">—</span>
+      </div>
+      <div class="scroll">
+        <table><thead><tr><th>ID Colaborador</th><th>Nº Assets</th><th>Data Fim Contrato</th><th>Assets Associados</th></tr></thead>
+        <tbody id="bUsers"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Users Terminated em Processo de Retenção</div>
+    <div class="tbl-card">
+      <div class="tbl-top">
+        <input class="search" id="sRet" type="text" placeholder="Pesquisar..." oninput="fRet()">
+        <span class="badge b-amber" id="cRet">—</span>
+      </div>
+      <div class="scroll">
+        <table><thead><tr><th>ID Colaborador</th><th>Nº Assets</th><th>Data Fim Contrato</th><th>Estado</th></tr></thead>
+        <tbody id="bRet"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Users Terminated Sem Processo de Retenção</div>
+    <div class="tbl-card">
+      <div class="tbl-top">
+        <input class="search" id="sNoRet" type="text" placeholder="Pesquisar..." oninput="fNoRet()">
+        <span class="badge b-red" id="cNoRet">—</span>
+      </div>
+      <div class="scroll">
+        <table><thead><tr><th>ID Colaborador</th><th>Nº Assets</th><th>Estado</th></tr></thead>
+        <tbody id="bNoRet"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Rescisões, Equipamentos e Recuperações por Mês</div>
+    <div class="tbl-card">
+      <div class="scroll">
+        <table><thead><tr>
+          <th>Mês</th><th>Total Resigns</th><th>Equipamentos</th>
+          <th>Recuperados</th><th>Em Processo</th><th>Recover %</th><th>Value Retained</th>
+        </tr></thead>
+        <tbody id="bRecov"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<footer>TP KPI HUB · TELEPERFORMANCE PORTUGAL LOGISTICS · FONTE: DASHBOARDS - KPI (PUBLISHED).XLSX · SHAREPOINT</footer>
+
+<script>
+// ── CSV URL ──────────────────────────────────────────────────────
+const CSV_URL = 'https://teleperformance.sharepoint.com/sites/PremisesSites/SiteAssets/Published/fe43ac20-e307-4e9a-8f31-4d6b7b6d1678/Dashboards%20-%20KPI%20(Published).xlsx?output=csv&Sheet=DASHBOARD';
+
+// ── FALLBACK DATA (última versão conhecida) ───────────────────────
+const FALLBACK = {
+  totais:[
+    {label:'Total de Assets',value:75208,sub:'Todos os locais',c:'var(--blue)'},
+    {label:'Edifícios',value:42383,sub:'TbEdificios',c:'var(--blue)'},
+    {label:'WAH / WAHA',value:22201,sub:'Work at Home',c:'var(--purple)'},
+    {label:'Apartamentos',value:7743,sub:'TbApartamentos',c:'var(--teal)'},
+    {label:'Warehouse',value:1501,sub:'TbWarehouse',c:'var(--green)'},
+    {label:'Staging',value:1206,sub:'TbStaging',c:'var(--amber)'},
+    {label:'AVT',value:674,sub:'TbAVT',c:'var(--muted)'},
+  ],
+  term:[
+    {label:'Total Assets Terminated',value:1436,sub:'Equipamentos por recuperar',c:'var(--red)'},
+    {label:'Em Retenção',value:134,sub:'Processo activo',c:'var(--amber)'},
+    {label:'Sem Retenção',value:728,sub:'Sem processo iniciado',c:'var(--red)'},
+    {label:'Recuperados Jan–Abr',value:574,sub:'2025',c:'var(--green)'},
+    {label:'Value Retained',value:'56.306 €',sub:'Jan–Mar 2025',c:'var(--green)'},
+  ],
+  users:[
+    {id:'3399417',qtd:6,data:'07/03/2026',assets:['TP.MOT.110215','TP.MOT.16934','TP.MOT.16935','TP.MOT.84996','TP.MPC.91210','TP.PRT.57450']},
+    {id:'763153',qtd:6,data:'30/11/2025',assets:['TP.CPT.31496','TP.MOT.89843','TP.PRT.109071','TP.MOT.25147','TP.MOT.48024','TP.MPC.63326']},
+    {id:'1271290',qtd:6,data:'—',assets:['TP.MOT.27271','TP.MOT.49340','TP.MPC.115399','TP.THC.113163','TP.PRT.67267','TP.MPC.121214']},
+    {id:'2754606',qtd:5,data:'30/11/2025',assets:['TP.MOT.24002','TP.MOT.75049','TP.MPC.54883','TP.MOT.63374','TP.MPC.89743']},
+    {id:'1463452',qtd:4,data:'30/11/2025',assets:['TP.MPC.115340','TP.MOT.44202','TP.MOT.44203','TP.MPC.65591']},
+    {id:'3092432',qtd:4,data:'30/11/2025',assets:['TP.CAD.13203','TP.MOT.102268','TP.MOT.115075','TP.MPC.63321']},
+    {id:'742349',qtd:3,data:'30/11/2025',assets:['TP.MOT.62593','TP.PRT.74231','TP.PRT.96835']},
+    {id:'1204898',qtd:3,data:'30/11/2025',assets:['TP.MPC.39164','TP.MOT.64493','TP.PRT.67195']},
+    {id:'1301696',qtd:3,data:'30/11/2025',assets:['TP.MOT.100772','TP.MOT.100886','TP.MOT.36893']},
+    {id:'1380848',qtd:3,data:'30/11/2025',assets:['TP.MOT.92375','TP.PRT.99705','TP.MOT.32605']},
+    {id:'2177725',qtd:3,data:'30/11/2025',assets:['TP.MOT.28361','TP.MOT.87188','TP.MPC.58079']},
+    {id:'2764337',qtd:3,data:'30/11/2025',assets:['TP.MOT.60720','TP.MOT.61642','TP.MPC.95389']},
+    {id:'2915104',qtd:3,data:'30/11/2025',assets:['TP.MOT.29214','TP.MOT.61653','TP.MPC.80636']},
+    {id:'2969338',qtd:3,data:'13/03/2026',assets:['TP.MOT.34621','TP.MOT.82378','TP.MPC.94831']},
+    {id:'3119492',qtd:3,data:'03/03/2026',assets:['TP.MOT.75356','TP.MOT.75409','TP.MPC.90816']},
+    {id:'3173303',qtd:3,data:'30/07/2025',assets:['TP.CAD.20119','TP.MOT.48024','TP.MOT.75491']},
+    {id:'486183',qtd:2,data:'30/11/2025',assets:['TP.MOT.65237','TP.MOT.61805']},
+    {id:'1932377',qtd:2,data:'30/11/2025',assets:['TP.MOT.19893','TP.MOT.20468']},
+    {id:'2998944',qtd:2,data:'19/03/2026',assets:['TP.MOT.119773','TP.MOT.119797']},
+    {id:'3038766',qtd:2,data:'17/03/2026',assets:['TP.MOT.66140','TP.MOT.11762']},
+    {id:'3362345',qtd:2,data:'27/02/2026',assets:['TP.MOT.13415','TP.MOT.15953']},
+    {id:'486189',qtd:2,data:'—',assets:['TP.CAD.40081','TP.MOT.60721']},
+    {id:'486281',qtd:2,data:'—',assets:['TP.MOT.61759','TP.THC.79371']},
+    {id:'662197',qtd:2,data:'—',assets:['TP.MOT.904883','TP.MOT.17258']},
+    {id:'1071559',qtd:2,data:'—',assets:['TP.MOT.21002','TP.MOT.56296']},
+    {id:'482275',qtd:1,data:'25/09/2025',assets:['TP.MPC.90758']},
+    {id:'485017',qtd:1,data:'30/11/2025',assets:['TP.CAD.03637']},
+    {id:'3038746',qtd:1,data:'21/03/2026',assets:['TP.MOT.17247']},
+    {id:'3087618',qtd:1,data:'16/12/2025',assets:['TP.MOT.40967']},
+    {id:'3113005',qtd:1,data:'20/01/2026',assets:['TP.MPC.70291']},
+    {id:'485891',qtd:1,data:'—',assets:['TP.CAD.03637']},
+    {id:'749296',qtd:1,data:'—',assets:['TP.MOT.98480']},
+    {id:'799314',qtd:1,data:'—',assets:['TP.MOT.93638']},
+    {id:'814941',qtd:1,data:'—',assets:['TP.MOT.05283']},
+    {id:'829631',qtd:1,data:'—',assets:['TP.MOT.904872']},
+    {id:'832732',qtd:1,data:'—',assets:['TP.CPT.21715']},
+    {id:'1029776',qtd:1,data:'—',assets:['TP.MPC.63374']},
+    {id:'1168354',qtd:1,data:'—',assets:['TP.MOT.01756']},
+    {id:'2231626',qtd:1,data:'—',assets:['TP.CAD.35323']},
+    {id:'2464215',qtd:1,data:'—',assets:['TP.PRT.56797']},
+  ],
+  recov:[
+    {mes:'01 — Janeiro',r:491,e:220,rec:184,pr:36,pct:83.6,val:'15.411,15 €'},
+    {mes:'02 — Fevereiro',r:429,e:216,rec:185,pr:31,pct:85.6,val:'21.882,80 €'},
+    {mes:'03 — Março',r:565,e:260,rec:193,pr:67,pct:74.2,val:'19.012,31 €'},
+    {mes:'04 — Abril',r:333,e:137,rec:12,pr:0,pct:8.8,val:'—'},
+    {mes:'05 — Maio',r:0,e:0,rec:0,pr:0,pct:0,val:'—'},
+    {mes:'06 — Junho',r:0,e:0,rec:0,pr:0,pct:0,val:'—'},
+    {mes:'07 — Julho',r:0,e:0,rec:0,pr:0,pct:0,val:'—'},
+    {mes:'08 — Agosto',r:0,e:0,rec:0,pr:0,pct:0,val:'—'},
+    {mes:'09 — Setembro',r:0,e:0,rec:0,pr:0,pct:0,val:'—'},
+    {mes:'10 — Outubro',r:0,e:0,rec:0,pr:0,pct:0,val:'—'},
+    {mes:'11 — Novembro',r:0,e:0,rec:0,pr:0,pct:0,val:'—'},
+    {mes:'12 — Dezembro',r:0,e:0,rec:0,pr:0,pct:0,val:'—'},
+    {mes:'Grand Total',r:1818,e:833,rec:574,pr:134,pct:null,val:'56.306,26 €'},
+  ]
+};
+
+// ── LOAD DATA ────────────────────────────────────────────────────
+let ALL_USERS = [];
+
+async function loadData() {
+  setLoading(true);
+  try {
+    const resp = await fetch(CSV_URL, { credentials: 'include', mode: 'cors' });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const text = await resp.text();
+    const parsed = Papa.parse(text, { skipEmptyLines: false });
+    const data = parseCSV(parsed.data);
+    renderAll(data);
+    setStatus('live', '● LIVE · actualizado às ' + new Date().toLocaleTimeString('pt',{hour:'2-digit',minute:'2-digit'}));
+    document.getElementById('updatedAt').textContent = new Date().toLocaleDateString('pt');
+  } catch(e) {
+    // Fallback to static data
+    renderAll(FALLBACK);
+    setStatus('cache', '○ Dados de 23/04/2026 · Abre no browser da TP para dados live');
+    document.getElementById('updatedAt').textContent = '23/04/2026';
+  }
+  setLoading(false);
+}
+
+function setLoading(on) {
+  document.getElementById('loadingBar').style.width = on ? '70%' : '100%';
+  if (!on) setTimeout(() => document.getElementById('loadingBar').style.width = '0', 300);
+}
+
+function setStatus(type, msg) {
+  const el = document.getElementById('statusBadge');
+  el.textContent = msg;
+  el.className = 'status status-' + type;
+}
+
+// ── PARSE CSV ────────────────────────────────────────────────────
+function parseCSV(rows) {
+  // Find header row with "Row Labels"
+  let hdr = -1;
+  for (let i = 0; i < rows.length; i++) {
+    if (rows[i].join('').includes('Row Labels')) { hdr = i; break; }
+  }
+  if (hdr < 0) return FALLBACK;
+
+  // Find pivot columns
+  const pivotCols = [];
+  rows[hdr].forEach((c, i) => { if (c === 'Row Labels') pivotCols.push(i); });
+
+  const tableMap = ['users','terminadosTipo','edificios','warehouse','staging','apartamentos','avt','wah'];
+  const parsed = {};
+
+  pivotCols.forEach((col, idx) => {
+    const name = tableMap[idx] || 'extra';
+    const items = [];
+    for (let r = hdr + 1; r < rows.length; r++) {
+      const lbl = (rows[r][col] || '').trim();
+      const val = parseInt((rows[r][col+1] || '').replace(/[^0-9]/g,''));
+      if (!lbl || lbl === 'Grand Total') continue;
+      if (!isNaN(val) && val > 0) items.push({tipo: lbl, qtd: val});
+    }
+    parsed[name] = items.sort((a,b) => b.qtd - a.qtd);
+  });
+
+  // Parse users + assets
+  let listCol = -1;
+  for (let ci = 0; ci < (rows[0]||[]).length; ci++) {
+    for (let ri = 0; ri < Math.min(10, rows.length); ri++) {
+      if ((rows[ri][ci]||'').includes('List of assets per user')) { listCol = ci; break; }
+    }
+    if (listCol >= 0) break;
+  }
+
+  const usersMap = {};
+  if (parsed.users) {
+    parsed.users.forEach(u => { usersMap[u.tipo] = {id:u.tipo, qtd:u.qtd, data:'—', assets:[]}; });
+  }
+
+  if (listCol >= 0) {
+    let cur = null;
+    for (let r = hdr + 1; r < rows.length; r++) {
+      const cell = (rows[r][listCol] || '').trim();
+      if (!cell) continue;
+      if (/^\d{6,8}$/.test(cell)) {
+        cur = cell;
+        if (!usersMap[cur]) usersMap[cur] = {id:cur, qtd:0, data:'—', assets:[]};
+      } else if (cur && /^\d{1,2}\/\d{1,2}\/\d{4}/.test(cell)) {
+        usersMap[cur].data = cell;
+      } else if (cur && cell.length > 3 && !cell.includes(' ')) {
+        usersMap[cur].assets.push(cell);
+        usersMap[cur].qtd = usersMap[cur].assets.length;
+      }
+    }
+  }
+
+  // Parse monthly recovery
+  let monthCol = -1;
+  rows.forEach(row => { row.forEach((c,i) => { if (c === 'Month') monthCol = i; }); });
+  const recov = [];
+  if (monthCol >= 0) {
+    const mhr = rows.findIndex(r => r[monthCol] === 'Month');
+    if (mhr >= 0) {
+      for (let r = mhr+1; r < rows.length; r++) {
+        const mes = (rows[r][monthCol]||'').trim();
+        if (!mes) continue;
+        recov.push({
+          mes, r: parseInt(rows[r][monthCol+1])||0,
+          e: parseInt(rows[r][monthCol+2])||0,
+          rec: parseInt(rows[r][monthCol+3])||0,
+          pr: parseInt(rows[r][monthCol+4])||0,
+          pct: parseFloat(rows[r][monthCol+5])||0,
+          val: (rows[r][monthCol+6]||'—').trim()
+        });
+      }
+    }
+  }
+
+  const users = Object.values(usersMap).sort((a,b)=>b.qtd-a.qtd);
+  const s = (arr) => arr.reduce((t,r)=>t+r.qtd, 0);
+
+  const edif = s(parsed.edificios||[]);
+  const wah  = s(parsed.wah||[]);
+  const ap   = s(parsed.apartamentos||[]);
+  const wh   = s(parsed.warehouse||[]);
+  const stg  = s(parsed.staging||[]);
+  const avt  = s(parsed.avt||[]);
+  const grand = edif+wah+ap+wh+stg+avt;
+
+  const termTotal = s(parsed.terminadosTipo||[]);
+  const gTotal = recov.find(r=>r.mes==='Grand Total')||{};
+
+  return {
+    totais: [
+      {label:'Total de Assets',value:grand,sub:'Todos os locais',c:'var(--blue)'},
+      {label:'Edifícios',value:edif,sub:'TbEdificios',c:'var(--blue)'},
+      {label:'WAH / WAHA',value:wah,sub:'Work at Home',c:'var(--purple)'},
+      {label:'Apartamentos',value:ap,sub:'TbApartamentos',c:'var(--teal)'},
+      {label:'Warehouse',value:wh,sub:'TbWarehouse',c:'var(--green)'},
+      {label:'Staging',value:stg,sub:'TbStaging',c:'var(--amber)'},
+      {label:'AVT',value:avt,sub:'TbAVT',c:'var(--muted)'},
+    ],
+    term: [
+      {label:'Total Assets Terminated',value:termTotal,sub:'Equipamentos por recuperar',c:'var(--red)'},
+      {label:'Em Retenção',value:gTotal.pr||0,sub:'Processo activo',c:'var(--amber)'},
+      {label:'Sem Retenção',value:Math.max(0,termTotal-(gTotal.pr||0)-(gTotal.rec||0)),sub:'Sem processo',c:'var(--red)'},
+      {label:'Recuperados',value:gTotal.rec||0,sub:'Acumulado 2025',c:'var(--green)'},
+      {label:'Value Retained',value:gTotal.val||'—',sub:'Acumulado 2025',c:'var(--green)'},
+    ],
+    users,
+    recov: recov.length ? recov : FALLBACK.recov,
+  };
+}
+
+// ── RENDER ───────────────────────────────────────────────────────
+function renderAll(data) {
+  ALL_USERS = data.users || [];
+
+  // Cards
+  ['gridTotais','gridTerm'].forEach((id, i) => {
+    const arr = i === 0 ? data.totais : data.term;
+    document.getElementById(id).innerHTML = arr.map(t=>`
+      <div class="card" style="--c:${t.c}">
+        <div class="card-label">${t.label}</div>
+        <div class="card-value">${typeof t.value==='number'?t.value.toLocaleString('pt'):t.value}</div>
+        <div class="card-sub">${t.sub}</div>
+      </div>`).join('');
+  });
+
+  renderUsers(ALL_USERS);
+  renderRet(ALL_USERS.filter(u=>u.data!=='—'));
+  renderNoRet(ALL_USERS.filter(u=>u.data==='—'));
+  renderRecov(data.recov);
+}
+
+function userRow(u) {
+  const vis = u.assets.slice(0,2).map(a=>`<div class="mono" style="color:var(--blue)">${a}</div>`).join('');
+  const more = u.assets.length > 2
+    ? `<button class="expand" onclick="expandAssets(this,'${u.assets.slice(2).join('|')}')">+${u.assets.length-2} mais</button>` : '';
+  return `<tr>
+    <td class="mono" style="color:var(--blue);font-weight:500">${u.id}</td>
+    <td><span class="badge b-blue">${u.qtd}</span></td>
+    <td class="mono" style="color:var(--muted)">${u.data}</td>
+    <td>${vis}${more}</td>
+  </tr>`;
+}
+
+function expandAssets(btn, enc) {
+  enc.split('|').forEach(a => {
+    const d = document.createElement('div');
+    d.className='mono'; d.style.color='var(--blue)'; d.textContent=a;
+    btn.before(d);
+  });
+  btn.remove();
+}
+
+function renderUsers(data) {
+  document.getElementById('cUsers').textContent = data.length+' colaboradores';
+  document.getElementById('bUsers').innerHTML = data.map(userRow).join('');
+}
+function fUsers() {
+  const q = document.getElementById('sUsers').value.toLowerCase();
+  renderUsers(ALL_USERS.filter(u=>u.id.includes(q)||u.assets.some(a=>a.toLowerCase().includes(q))));
+}
+
+function renderRet(data) {
+  document.getElementById('cRet').textContent = data.length+' colaboradores';
+  document.getElementById('bRet').innerHTML = data.map(u=>`<tr>
+    <td class="mono" style="color:var(--blue);font-weight:500">${u.id}</td>
+    <td><span class="badge b-blue">${u.qtd}</span></td>
+    <td class="mono" style="color:var(--muted)">${u.data}</td>
+    <td><span class="badge b-amber">In Process</span></td>
+  </tr>`).join('');
+}
+function fRet() {
+  const q=document.getElementById('sRet').value.toLowerCase();
+  renderRet(ALL_USERS.filter(u=>u.data!=='—'&&u.id.includes(q)));
+}
+
+function renderNoRet(data) {
+  document.getElementById('cNoRet').textContent = data.length+' colaboradores';
+  document.getElementById('bNoRet').innerHTML = data.map(u=>`<tr>
+    <td class="mono" style="color:var(--blue);font-weight:500">${u.id}</td>
+    <td><span class="badge b-blue">${u.qtd}</span></td>
+    <td><span class="badge b-red">Sem processo</span></td>
+  </tr>`).join('');
+}
+function fNoRet() {
+  const q=document.getElementById('sNoRet').value.toLowerCase();
+  renderNoRet(ALL_USERS.filter(u=>u.data==='—'&&u.id.includes(q)));
+}
+
+function renderRecov(recov) {
+  document.getElementById('bRecov').innerHTML = recov.map(r=>{
+    const isG=r.mes==='Grand Total';
+    const has=r.r>0||isG;
+    const pc=r.pct===null?'var(--text)':r.pct>=75?'var(--green)':r.pct>=40?'var(--amber)':'var(--red)';
+    return `<tr style="${isG?'font-weight:600;background:var(--s2)':''}">
+      <td class="mono" style="font-size:11px">${r.mes}</td>
+      <td class="mono">${has?r.r.toLocaleString('pt'):'—'}</td>
+      <td class="mono">${has?r.e.toLocaleString('pt'):'—'}</td>
+      <td class="mono" style="color:var(--green)">${has?r.rec.toLocaleString('pt'):'—'}</td>
+      <td class="mono" style="color:var(--amber)">${has?r.pr.toLocaleString('pt'):'—'}</td>
+      <td>${r.pct!==null&&has?`<div class="pct-wrap"><span class="mono" style="color:${pc};min-width:38px">${r.pct}%</span><div class="bar-bg"><div class="bar-fill" style="width:${Math.round(r.pct)}%;background:${pc}"></div></div></div>`:'—'}</td>
+      <td class="mono" style="color:var(--green)">${r.val}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── INIT ─────────────────────────────────────────────────────────
+loadData();
+// Auto-refresh every 15 minutes
+setInterval(loadData, 15 * 60 * 1000);
+</script>
+</body>
+</html>
